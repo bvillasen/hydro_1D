@@ -19,3 +19,48 @@ class MPI_Box:
   def print( self, text ):
     if self.id == 0: print( text )
 
+
+
+
+def Set_MPI_Boundaries( self ):
+  id = self.mpi.id
+  id_l = self.mpi.id_l
+  id_r = self.mpi.id_r
+  comm = self.mpi.comm
+  n_ghost  = self.n_ghost
+  n_fileds = self.n_fileds
+
+  # Set Left Buffer
+  self.send_buffer_l[0*n_ghost:1*n_ghost] = self.density [n_ghost:2*n_ghost]
+  self.send_buffer_l[1*n_ghost:2*n_ghost] = self.momentum[n_ghost:2*n_ghost]
+  self.send_buffer_l[2*n_ghost:3*n_ghost] = self.energy  [n_ghost:2*n_ghost] 
+
+  # Set Right Buffer
+  self.send_buffer_r[0*n_ghost:1*n_ghost] = self.density [-2*n_ghost:-n_ghost]
+  self.send_buffer_r[1*n_ghost:2*n_ghost] = self.momentum[-2*n_ghost:-n_ghost]
+  self.send_buffer_r[2*n_ghost:3*n_ghost] = self.energy  [-2*n_ghost:-n_ghost] 
+
+  print( 'Transfering Boundaries' )
+  # Even processes
+  if id % 2 == 0:
+    comm.Send(self.send_buffer_r, dest=id_r, tag=1)
+    comm.Send(self.send_buffer_l, dest=id_l, tag=0)
+    comm.Recv(self.recv_buffer_l, source=id_l, tag=1)
+    comm.Recv(self.recv_buffer_r, source=id_r, tag=0)
+    
+  # Odd processes
+  if id % 2 == 1:
+    comm.Recv(self.recv_buffer_l, source=id_l, tag=1)
+    comm.Recv(self.recv_buffer_r, source=id_r, tag=0)
+    comm.Send(self.send_buffer_r, dest=id_r, tag=1)
+    comm.Send(self.send_buffer_l, dest=id_l, tag=0)
+    
+  # Unload the transfer buffers
+  self.density[:n_ghost]  = self.recv_buffer_l[0*n_ghost:1*n_ghost] 
+  self.momentum[:n_ghost] = self.recv_buffer_l[1*n_ghost:2*n_ghost]  
+  self.energy[:n_ghost]   = self.recv_buffer_l[2*n_ghost:3*n_ghost]  
+
+  self.density[-n_ghost:]  = self.recv_buffer_r[0*n_ghost:1*n_ghost] 
+  self.momentum[-n_ghost:] = self.recv_buffer_r[1*n_ghost:2*n_ghost]  
+  self.energy[-n_ghost:]   = self.recv_buffer_r[2*n_ghost:3*n_ghost] 
+    
